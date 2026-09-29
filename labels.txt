@@ -1,0 +1,25 @@
+playa|a photo of a beach
+oceano|a photo of the ocean or sea
+montana|a photo of mountains
+bosque|a photo of a forest
+selva|a photo of a tropical jungle
+desierto|a photo of a desert
+campo|a photo of countryside or farmland
+lago|a photo of a lake
+rio|a photo of a river
+cascada|a photo of a waterfall
+nieve|a photo of a snowy landscape
+ciudad|a photo of a city skyline or urban landscape
+calle|a photo of a street
+edificio|a photo of buildings or architecture
+interior|an indoor scene
+parque|a photo of a park
+jardin|a photo of a garden
+atardecer|a photo of a sunset
+amanecer|a photo of a sunrise
+noche|a nighttime outdoor scene
+cielo|a photo dominated by sky or clouds
+carretera|a photo of a road or highway
+puente|a photo of a bridge
+monumento|a photo of a monument or landmark
+otro|a general photo that does not clearly match the other landscape categories
