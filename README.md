@@ -44,7 +44,7 @@ python src/analyze.py \
   --output /workspace/resultados
 ```
 
-El resultado será parecido a:
+Por defecto organiza por similitud visual:
 
 ```text
 resultados/
@@ -52,13 +52,21 @@ resultados/
 │   ├── GRUPO_001/
 │   ├── GRUPO_002/
 │   └── ...
-├── etiquetas/
-│   ├── playa/
-│   ├── montana/
-│   └── ...
-├── resultados.csv
-└── paisajes.sqlite3
+├── .paisajes-ai/
+│   └── paisajes.sqlite3
+└── resultados.csv
 ```
+
+El CSV también incluye la etiqueta CLIP de cada imagen. Si además quieres carpetas por etiqueta:
+
+```bash
+python src/analyze.py \
+  --input /workspace/fotos \
+  --output /workspace/resultados \
+  --organize-by both
+```
+
+Eso crea también `etiquetas/playa/`, `etiquetas/montana/`, etc.
 
 Por seguridad, el programa **copia** las imágenes de forma predeterminada. Usa `--move` solo si quieres mover los originales.
 
