@@ -1,42 +1,194 @@
 # Paisajes-IA
 
-Clasificador y agrupador de paisajes con **DINOv2 + CLIP**, pensado para ejecutarse en Lightning AI con GPU.
+Clasificador y agrupador de paisajes con **DINOv2 + CLIP**, pensado para ejecutar la IA en Lightning AI y mantener las fotos bajo control de Termux/Android.
 
-## Qué hace
+## Flujo recomendado: Termux + Lightning AI
 
-- DINOv2 crea embeddings visuales para medir similitud entre imágenes.
-- CLIP asigna etiquetas semánticas como playa, montaña, bosque, ciudad, nieve, atardecer, etc.
-- Agrupa automáticamente imágenes visualmente parecidas.
-- Guarda una caché SQLite por SHA-256 para no recalcular imágenes ya procesadas.
-- Puede copiar (por defecto) o mover las imágenes a carpetas de resultados.
-- Reduce imágenes grandes antes de procesarlas para controlar el consumo de RAM.
-- Funciona por lotes en GPU y usa FP16 cuando CUDA está disponible.
+Las fotos **no tienen que quedarse almacenadas en Lightning**.
 
-## Lightning AI
+El flujo automático es:
 
-En la terminal del Studio:
+```text
+Android / Termux
+carpeta de fotos
+      │
+      │ lote temporal
+      ▼
+Lightning AI
+DINOv2 + CLIP
+      │
+      ├─ devuelve etiqueta + embedding
+      └─ elimina las copias temporales
+      │
+      ▼
+Termux
+SQLite local + grupos persistentes
+      │
+      └─ copia o mueve el archivo original localmente
+```
+
+El worker de Lightning permanece encendido con DINOv2 y CLIP cargados en memoria, así no se vuelven a cargar los modelos para cada foto.
+
+### 1. Preparar Lightning AI
+
+En el Studio:
 
 ```bash
 git clone https://github.com/I-s-ax/Paisajes-IA.git
 cd Paisajes-IA
 bash setup.sh
+python src/download_models.py
 ```
 
-Comprueba la GPU:
+Cuando vayas a procesar fotos, activa una GPU y comprueba:
 
 ```bash
-python -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')"
+python src/check_env.py
 ```
 
-## Uso rápido
+Luego inicia el worker:
 
-Crea una carpeta local para las fotos, por ejemplo:
+```bash
+bash cloud/start_worker.sh
+```
+
+Ver el log:
+
+```bash
+tail -f .runtime/worker.log
+```
+
+El worker usa por defecto:
 
 ```text
-/workspace/fotos
+/tmp/paisajes-ia/incoming/
+/tmp/paisajes-ia/results/
 ```
 
-y ejecuta:
+Cuando termina un lote, elimina inmediatamente la carpeta temporal que contenía las fotos. El JSON de resultado queda hasta que Termux confirma que lo recibió.
+
+### 2. Obtener los datos SSH de Lightning
+
+En el Studio usa **Connect via SSH** y toma los valores de host, usuario, puerto y, si aplica, la clave privada.
+
+Primero comprueba desde Termux que el comando SSH proporcionado por Lightning funciona.
+
+### 3. Preparar Termux
+
+En Android:
+
+```bash
+git clone https://github.com/I-s-ax/Paisajes-IA.git
+cd Paisajes-IA
+bash termux/setup.sh
+```
+
+El cliente Termux solo usa Python estándar + OpenSSH.
+
+### 4. Procesar una carpeta local
+
+Ejemplo:
+
+```bash
+python termux/client.py \
+  --input /storage/emulated/0/DCIM/Camera \
+  --output /storage/emulated/0/PaisajesClasificados \
+  --host TU_HOST \
+  --user TU_USUARIO \
+  --port TU_PUERTO \
+  --batch-size 12 \
+  --move
+```
+
+Si Lightning usa una clave SSH:
+
+```bash
+python termux/client.py \
+  --input /storage/emulated/0/DCIM/Camera \
+  --output /storage/emulated/0/PaisajesClasificados \
+  --host TU_HOST \
+  --user TU_USUARIO \
+  --port TU_PUERTO \
+  --identity ~/.ssh/TU_CLAVE \
+  --move
+```
+
+Sin `--move`, el cliente **copia** las fotos y conserva los originales.
+
+### Qué guarda Termux
+
+Dentro de la salida:
+
+```text
+PaisajesClasificados/
+├── GRUPO_0001/
+├── GRUPO_0002/
+├── ...
+├── resultados.csv
+└── .paisajes-ai/
+    └── estado.sqlite3
+```
+
+La base local recuerda:
+
+- hashes SHA-256;
+- imágenes ya procesadas;
+- grupos persistentes;
+- centroides DINOv2;
+- etiquetas CLIP;
+- destinos locales.
+
+Por eso, si se corta Internet o cierras Termux, puedes ejecutar el mismo comando otra vez y continuar.
+
+### Agrupar o clasificar por etiqueta
+
+Por defecto organiza por grupo visual:
+
+```bash
+--organize-by group
+```
+
+Solo por etiqueta CLIP:
+
+```bash
+--organize-by label
+```
+
+Etiqueta y grupo:
+
+```bash
+--organize-by label-group
+```
+
+Ejemplo:
+
+```text
+PaisajesClasificados/
+└── playa/
+    └── GRUPO_0003/
+        ├── IMG_001.jpg
+        └── IMG_002.jpg
+```
+
+### Ajustar similitud de los grupos
+
+El cliente usa por defecto:
+
+```bash
+--similarity 0.86
+```
+
+Un valor más alto exige imágenes más parecidas. Un valor más bajo agrupa de forma más amplia.
+
+Ejemplo:
+
+```bash
+--similarity 0.90
+```
+
+## Modo directo en Lightning
+
+También existe `src/analyze.py` para el caso en que quieras subir una carpeta completa al Studio y procesarla allí.
 
 ```bash
 python src/analyze.py \
@@ -66,25 +218,7 @@ python src/analyze.py \
   --organize-by both
 ```
 
-Eso crea también `etiquetas/playa/`, `etiquetas/montana/`, etc.
-
-Por seguridad, el programa **copia** las imágenes de forma predeterminada. Usa `--move` solo si quieres mover los originales.
-
-## Número de grupos
-
-Por defecto `--clusters auto` estima automáticamente una cantidad razonable de grupos.
-
-También puedes fijarlo:
-
-```bash
-python src/analyze.py --input /workspace/fotos --output /workspace/resultados --clusters 12
-```
-
-## Solo analizar, sin copiar archivos
-
-```bash
-python src/analyze.py --input /workspace/fotos --output /workspace/resultados --dry-run
-```
+Por seguridad, este modo también **copia** las imágenes de forma predeterminada. Usa `--move` solo si quieres mover los originales.
 
 ## Etiquetas personalizadas
 
@@ -104,7 +238,11 @@ bosque|a photo of a forest
 
 ## Privacidad
 
-Las imágenes se procesan en la máquina de Lightning AI. El repositorio no necesita contener fotografías. Las carpetas `photos/`, `images/`, `data/`, `outputs/` y archivos de caché están excluidos por `.gitignore`.
+El repositorio no necesita contener fotografías.
+
+En el modo Termux + Lightning, cada lote se transfiere temporalmente a la máquina de Lightning. El worker elimina las copias del lote después de obtener DINOv2 + CLIP. El original permanece en Android y solo Termux lo mueve o copia.
+
+Eliminar el archivo temporal del Studio no constituye una garantía de borrado forense de toda la infraestructura del proveedor.
 
 ## Modelos
 
