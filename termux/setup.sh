@@ -3,7 +3,7 @@ set -euo pipefail
 
 echo "== Paisajes-IA para Termux =="
 
-pkg install -y python openssh git
+pkg install -y python openssh git curl
 
 echo
 echo "Solicitando acceso al almacenamiento compartido de Android..."
